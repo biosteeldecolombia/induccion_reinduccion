@@ -6,6 +6,7 @@
 
   var CONTACT = 'gestionhumana@biosteeldecolombia.com';
   var CC = 'calidad@biosteeldecolombia.com';
+  var CFG = window.BS_CONFIG || {};
   var MODULOS = [
     'Módulo 1: Inducción General',
     'Módulo 2: Seguridad y Salud en el Trabajo',
@@ -47,6 +48,13 @@
       '<p class="field__err" id="e-' + id + '">' + ic('alert') + '<span></span></p></div>';
   }
 
+  function privacyHtml() {
+    var p = CFG.endpoint
+      ? '<b>Cómo se tratan tus datos.</b> Al generar la constancia se crea un PDF en tu equipo, con tu firma. Además, tus nombres, cédula, cargo, correo, módulos confirmados, comentarios y la fecha y hora se envían al registro de constancias de Gestión Humana de Biosteel (un Excel en la cuenta de Microsoft de la empresa). <b>Tu firma no se envía</b>: queda solo en el PDF. Este sitio no guarda nada de esto. Si sales de la página antes de generarla, tendrás que volver a llenar el formulario.'
+      : '<b>Tus datos se quedan en tu navegador.</b> Lo que escribas aquí (cédula, correo, firma) no se guarda en este sitio ni se envía a ningún servidor. Al terminar se crea un PDF en tu equipo, que tú descargas y envías a Gestión Humana. Si sales de esta página antes de generarlo, tendrás que volver a llenar el formulario.';
+    return '<div class="privacy">' + ic('lock') + '<p>' + p + '</p></div>';
+  }
+
   function render() {
     var mods = MODULOS.map(function (m, i) {
       return '<label class="opt"><input type="checkbox" name="mod" value="' + i + '"> <span>' + m + '</span></label>';
@@ -54,7 +62,7 @@
     return '' +
       '<div class="form-head"><img src="assets/img/logo-biosteel-white.png" alt="BioSteel de Colombia S.A." width="150" height="42">' +
         '<h3>Constancia de Inducción y Reinducción — Biosteel de Colombia S.A.S.</h3></div>' +
-      '<div class="privacy">' + ic('lock') + '<p><b>Tus datos se quedan en tu navegador.</b> Lo que escribas aquí (cédula, correo, firma) no se guarda en este sitio ni se envía a ningún servidor. Al terminar se crea un PDF en tu equipo, que tú descargas y envías a Gestión Humana. Si sales de esta página antes de generarlo, tendrás que volver a llenar el formulario.</p></div>' +
+      privacyHtml() +
       '<form class="form" id="cForm" novalidate>' +
         '<div class="form-errors" id="cErrors" role="alert" tabindex="-1"></div>' +
         '<div class="form__row">' +
@@ -165,7 +173,7 @@
     return new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota', day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
   }
 
-  async function buildPdf(d, sig) {
+  async function buildPdf(d, sig, id) {
     var J = window.jspdf && window.jspdf.jsPDF;
     if (!J) throw new Error('No se cargó la librería de PDF.');
     var doc = new J({ unit: 'mm', format: 'a4', compress: true }), W = 210, M = 18, y = 0, navy = [32, 53, 98], blue = [0, 74, 152], dark = [26, 39, 68], mid = [74, 96, 128];
@@ -214,7 +222,7 @@
 
     need(54);
     heading('Firma y fecha');
-    row('Fecha y hora', stamp() + ' (hora de Colombia)');
+    row('Fecha y hora', d.fechaHora + ' (hora de Colombia)'); row('Código', id);
     y += 1;
     var sw = 70, sh = Math.min(24, sw / sig.ratio); sw = Math.min(sw, sh * sig.ratio);
     doc.addImage(sig.data, 'PNG', M, y, sw, sh, undefined, 'FAST'); y += sh + 1;
@@ -233,6 +241,26 @@
     return doc;
   }
 
+  /* ───────── Envío al registro (Power Automate) ───────── */
+  function newId() {
+    var a = new Uint8Array(4); crypto.getRandomValues(a);
+    return Array.prototype.map.call(a, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('').toUpperCase();
+  }
+  /* No incluye la firma: queda solo en el PDF. */
+  function payload(d) {
+    return { codigo: d.codigo, nombres: d.nombres, apellidos: d.apellidos, cedula: d.cedula, cargo: d.cargo, correo: d.correo,
+      modulos: MODULOS.join(' | '), comentarios: d.comentarios, fechaHora: d.fechaHora, fechaIso: d.fechaIso };
+  }
+  /* text/plain evita la petición previa (preflight), que Power Automate no responde.
+     Solo se da por bueno el envío si el flujo contesta 2xx y el navegador puede leerlo. */
+  async function send(p) {
+    var ctl = new AbortController(), t = setTimeout(function () { ctl.abort(); }, CFG.timeoutMs || 15000);
+    try {
+      var r = await fetch(CFG.endpoint, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=UTF-8' }, body: JSON.stringify(p), signal: ctl.signal });
+      return r.ok;
+    } catch (e) { return false; } finally { clearTimeout(t); }
+  }
+
   /* ───────── Validación y enlace ───────── */
   function bind(root, opts) {
     var form = $('#cForm', root); if (!form) return;
@@ -240,7 +268,7 @@
       $('#signPad', root).classList.toggle('is-signed', pad && pad.hasInk());
       if (pad && pad.hasInk()) setErr('firma', '');
     });
-    var errors = {}, lastDoc = null, lastName = '';
+    var errors = {}, lastDoc = null, lastName = '', lastPayload = null;
     $('#signClear', root).addEventListener('click', function () { pad.clear(); });
 
     var wrap = function (id) { return $('[data-field="' + id + '"]', form); };
@@ -298,11 +326,14 @@
       if (first) { focusField(first); return; }
       var btn = $('button[type="submit"]', form); btn.disabled = true;
       var d = { nombres: val('nombres'), apellidos: val('apellidos'), cedula: form.elements.cedula.value.trim(), cargo: val('cargo'), correo: form.elements.correo.value.trim(), comentarios: val('comentarios') };
+      d.codigo = newId(); d.fechaHora = stamp(); d.fechaIso = new Date().toISOString();
       try {
-        lastDoc = await buildPdf(d, pad.toPng());
-        lastName = 'Constancia_Induccion_Biosteel_' + new Date().toISOString().slice(0, 10) + '.pdf';
+        lastDoc = await buildPdf(d, pad.toPng(), d.codigo);
+        lastName = 'Constancia_Induccion_Biosteel_' + d.codigo + '.pdf';
         lastDoc.save(lastName);
-        showResult(root);
+        lastPayload = payload(d);
+        showResult(root, CFG.endpoint ? 'pending' : null);
+        if (CFG.endpoint) { var ok = await send(lastPayload); showResult(root, ok ? 'ok' : 'fail'); }
         if (opts && opts.onGenerated) opts.onGenerated();
       } catch (err) {
         $('#cErrors', root).innerHTML = '<b>No se pudo generar el PDF.</b> ' + esc(err.message || 'Intenta de nuevo.') + ' Si el problema continúa, escribe a ' + CONTACT + '.';
@@ -310,14 +341,20 @@
       } finally { btn.disabled = false; }
     });
 
-    function showResult(r) {
+    function showResult(r, sent) {
       var subj = encodeURIComponent('Constancia de Inducción y Reinducción');
       var body = encodeURIComponent('Buen día. Adjunto mi constancia de inducción y reinducción en PDF.');
-      $('#cResult', r).innerHTML = '<div class="result"><h3>Tu constancia se generó como PDF</h3>' +
+      var reg = !sent ? '' : sent === 'pending' ? '<p><b>Enviando tus datos al registro de Gestión Humana…</b></p>'
+        : sent === 'ok' ? '<p><b>Tus datos quedaron registrados en Gestión Humana.</b> El PDF con tu firma sigue siendo tu constancia: envíalo también por correo.</p>'
+        : '<p><b>No pudimos confirmar el registro de tus datos.</b> Puede ser un problema de conexión o del servicio. Tu PDF sí se generó: envíalo por correo a Gestión Humana, o reintenta el registro.</p>';
+      $('#cResult', r).innerHTML = '<div class="result"><h3>Tu constancia se generó como PDF</h3>' + reg +
         '<p>Se descargó el archivo <b>' + esc(lastName) + '</b> en tu equipo. Este sitio no lo envía ni lo guarda: <b>debes enviarlo tú</b> a Gestión Humana.</p>' +
         '<p>El botón abre tu programa de correo con el mensaje listo, pero <b>no puede adjuntar el PDF</b>: adjúntalo tú antes de enviar.</p>' +
         '<div class="form__actions"><a class="btn btn--primary" href="mailto:' + CONTACT + '?cc=' + CC + '&subject=' + subj + '&body=' + body + '">' + ic('mail') + 'Abrir correo para enviarla</a>' +
-        '<button type="button" class="btn btn--secondary" id="cAgain">' + ic('download') + 'Descargar de nuevo</button></div></div>';
+        '<button type="button" class="btn btn--secondary" id="cAgain">' + ic('download') + 'Descargar de nuevo</button>' +
+        (sent === 'fail' ? '<button type="button" class="btn btn--secondary" id="cRetry">' + ic('refresh') + 'Reintentar registro</button>' : '') + '</div></div>';
+      var rt = $('#cRetry', r);
+      if (rt) rt.addEventListener('click', async function () { showResult(r, 'pending'); showResult(r, (await send(lastPayload)) ? 'ok' : 'fail'); });
       $('#cAgain', r).addEventListener('click', function () { if (lastDoc) lastDoc.save(lastName); });
       $('#cResult .result', r).scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
