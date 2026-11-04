@@ -3,6 +3,6 @@
    por correo a Gestión Humana (ver docs/ENVIO_CORREO.md). Si está vacío, la constancia solo se
    genera como PDF y no se envía ningún dato. */
 window.BS_CONFIG = {
-  endpoint: '',
+  endpoint: 'https://script.google.com/macros/s/AKfycbwnpvsuX3UECKRPURlieTBjZtmPjxoZ4AsgSZYQR_yukydgnJ2GZrO_MtS3QeCJnSd4/exec',
   timeoutMs: 30000
 };
