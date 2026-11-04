@@ -226,16 +226,20 @@
           '<div class="note">' + ic('lock') + '<span>Los datos que escribas se quedan en tu navegador. No se guardan en este sitio ni se envían a ningún servidor.</span></div>'; } },
         { t: 'Diligencia y firma', ic: 'pen', gate: true, html: function () { return Constancia.render(); },
           after: function (root) { Constancia.bind(root, { onGenerated: function () { markDone(2, 1); paint(); } }); } },
-        { t: 'Envía tu constancia', ic: 'mail', declare: 'Ya envié mi constancia en PDF a Gestión Humana', html: function (done) { return '' +
-          '<p class="prose-lg">Tu constancia es el PDF que descargaste. Este sitio no lo envía por ti.</p>' +
-          numbered([
-            ['Abre tu correo', 'Escribe a <b>' + CONTACT + '</b>. Gestión Humana y Calidad reciben las constancias.'],
-            ['Adjunta el PDF', 'El enlace de correo no puede adjuntar archivos por sí solo: adjunta tú el PDF descargado antes de enviar.'],
-            ['Envía y marca el paso', 'Cuando lo hayas enviado, marca la casilla de abajo para que cuente en tu avance.']
-          ]) +
-          '<div class="form__actions"><a class="btn btn--primary" href="mailto:' + CONTACT + '?cc=calidad@biosteeldecolombia.com&subject=Constancia%20de%20Inducci%C3%B3n%20y%20Reinducci%C3%B3n">' + ic('mail') + 'Abrir correo</a></div>' +
-          checkBtn(2, 2, 'Ya envié mi constancia en PDF a Gestión Humana', done) +
-          '<p class="hint">' + ic('help') + 'Este sitio no puede comprobar que el correo haya llegado: tu avance es de autodeclaración.</p>'; } }
+        { t: 'Envía tu constancia', ic: 'mail', declare: 'Mi constancia ya está en manos de Gestión Humana', html: function (done) {
+          var auto = !!(window.BS_CONFIG && window.BS_CONFIG.endpoint);
+          return (auto
+            ? '<p class="prose-lg">Al generar tu constancia, el sitio la envía por correo a Gestión Humana. Confirma que viste el mensaje <b>“Tu constancia fue enviada a Gestión Humana”</b>.</p>' +
+              '<div class="callout">' + ic('mail') + '<div><h3>Si no viste esa confirmación</h3><p>El envío pudo fallar. Vuelve al paso anterior y usa “Reintentar envío”, o envía tú el PDF descargado a <b>' + CONTACT + '</b>.</p></div></div>'
+            : '<p class="prose-lg">Tu constancia es el PDF que descargaste. Este sitio no lo envía por ti.</p>' +
+              numbered([
+                ['Abre tu correo', 'Escribe a <b>' + CONTACT + '</b>. Gestión Humana y Calidad reciben las constancias.'],
+                ['Adjunta el PDF', 'El enlace de correo no puede adjuntar archivos por sí solo: adjunta tú el PDF descargado antes de enviar.'],
+                ['Envía y marca el paso', 'Cuando lo hayas enviado, marca la casilla de abajo para que cuente en tu avance.']
+              ])) +
+          '<div class="form__actions"><a class="btn ' + (auto ? 'btn--secondary' : 'btn--primary') + '" href="mailto:' + CONTACT + '?cc=calidad@biosteeldecolombia.com&subject=Constancia%20de%20Inducci%C3%B3n%20y%20Reinducci%C3%B3n">' + ic('mail') + (auto ? 'Escribir a Gestión Humana' : 'Abrir correo') + '</a></div>' +
+          checkBtn(2, 2, 'Mi constancia ya está en manos de Gestión Humana', done) +
+          '<p class="hint">' + ic('help') + 'Este sitio no puede comprobar que Gestión Humana haya recibido o leído el correo: tu avance es de autodeclaración.</p>'; } }
       ] },
 
     { n: 3, title: 'Módulo SAGRILAFT', icon: 'shield-check', deck: 'sag',
