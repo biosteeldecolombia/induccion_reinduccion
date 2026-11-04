@@ -182,6 +182,10 @@
     doc.setFillColor.apply(doc, navy); doc.rect(0, 0, W, 30, 'F');
     if (logo) { try { var lh = 15, lw = lh * logo.naturalWidth / logo.naturalHeight; doc.addImage(logo, 'PNG', M, 7.5, lw, lh, undefined, 'FAST'); } catch (e) { logo = null; } }
     if (!logo) { doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.text('BioSteel de Colombia S.A.', M, 17); }
+    /* Control documental, arriba a la derecha */
+    doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
+    doc.text('CODIGO: FOR-GH-007', W - M, 13.5, { align: 'right' });
+    doc.text('VERSIÓN: 01', W - M, 19, { align: 'right' });
     y = 44;
     doc.setTextColor.apply(doc, navy); doc.setFont('helvetica', 'bold'); doc.setFontSize(17);
     doc.text('Constancia de Inducción y Reinducción', M, y); y += 7;
